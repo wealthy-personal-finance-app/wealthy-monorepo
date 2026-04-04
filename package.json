@@ -1,0 +1,20 @@
+{
+  "name": "wealthy-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend/*",
+    "client",
+    "common"
+  ],
+  "scripts": {
+    "install-all": "npm install",
+    "dev": "concurrently \"npm run dev -w auth-service\" \"npm run dev -w transaction-service\" \"npm run dev -w ai-finance-service\" \"npm run dev -w gateway\" \"npm run dev -w payment-service\"",
+    "clean": "rimraf node_modules **/node_modules",
+    "test": "npm test --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.0"
+  }
+}

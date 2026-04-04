@@ -1,2 +1,10 @@
-.node_modules
+# Dependencies
+node_modules/
+
+# Secrets - VERY IMPORTANT
 .env
+.env.local
+
+# Build files
+client/dist/
+client/build/
