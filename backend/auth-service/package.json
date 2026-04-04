@@ -13,8 +13,19 @@
   "description": "",
   "dependencies": {
     "@wealthy/common": "^1.0.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-twitter": "^1.0.4"
+  },
+  "devDependencies": {
     "nodemon": "^3.1.14"
   }
 }
