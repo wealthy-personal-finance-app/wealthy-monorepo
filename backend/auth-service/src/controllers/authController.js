@@ -2,8 +2,8 @@
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import generateToken from '../../../../common/utils/generateToken.js';
-import { successResponse, errorResponse } from '../../../../common/utils/response.js';
+import {generateToken} from '@wealthy/common';
+import { successResponse, errorResponse } from '@wealthy/common';
 
 // ===== REGISTER =====
 const register = async (req, res) => {
