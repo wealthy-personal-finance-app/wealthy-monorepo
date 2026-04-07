@@ -1,39 +1,29 @@
-import express, { json, raw } from 'express';
-import stripe from 'stripe';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import express from "express"
+import dotenv from "dotenv"
+import path from "path"
+import cors from "cors"
+import {fileURLToPath} from "url"
+import paymentRoutes from "./routes/paymentRoutes.js"
+import {connectDB} from "@wealthy/common"
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Load .env from root
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({path: path.resolve(__dirname, "../../../.env")})
 
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+const app = express()
+app.use(cors());
 
-const app = express();
+app.use("/", paymentRoutes)
 
-// Stripe webhooks require the raw body to verify the signature
-// We use a middleware to handle JSON for regular routes
-app.use((req, res, next) => {
-    if (req.originalUrl === '/webhook') {
-        next();
-    } else {
-        json()(req, res, next);
-    }
-});
+// For all other routes, use JSON
 
-const PORT = process.env.PAYMENT_PORT || 5004;
-// const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY);
 
-// Route for creating a checkout session
-app.post('/create-checkout', async (req, res) => {
-    // Phase 7: Implement Stripe Checkout logic here
-    res.json({ message: "Payment Service: Checkout endpoint active" });
-});
+const PORT = process.env.PAYMENT_PORT || 5003
+const startService = async () => {
+  await connectDB("wealthy_auth")
+  app.listen(PORT, () =>
+    console.log(`🚀 Payment Service running on port ${PORT}`)
+  )
+}
 
-// Route for Stripe Webhooks
-app.post('/webhook', raw({ type: 'application/json' }), (req, res) => {
-    // This handles payment success/failure notifications from Stripe
-    res.status(200).send({ received: true });
-});
-
-app.listen(PORT, () => console.log(`Payment Service running on port ${PORT}`));
+startService()
