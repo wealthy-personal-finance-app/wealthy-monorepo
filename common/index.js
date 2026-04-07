@@ -4,5 +4,6 @@ import generateToken from "./utils/generateToken.js";
 import { successResponse, errorResponse } from "./utils/response.js";
 import { protect } from "./middleware/authMiddleware.js";
 import Transaction from "./models/Transaction.js";
+import Subscription from "./models/Subscription.js";
 
-export { logger, connectDB, generateToken, successResponse, errorResponse, protect, Transaction };
+export { logger, connectDB, generateToken, successResponse, errorResponse, protect, Transaction, Subscription };
