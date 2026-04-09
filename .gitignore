@@ -8,3 +8,7 @@ node_modules/
 # Build files
 client/dist/
 client/build/
+
+# Logs
+logs/
+*.log
