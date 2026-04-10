@@ -18,8 +18,6 @@ export const generateGeneralResponse = async (question) => {
     - give short and concise answers.
   `
 
-  console.log(prompt)
-
   const result = await model.generateContent(prompt)
   return result.response.text()
 }
