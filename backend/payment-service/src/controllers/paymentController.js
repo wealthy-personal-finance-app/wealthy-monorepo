@@ -5,6 +5,41 @@ import {
 } from "../services/stripeService.js"
 import {Subscription, successResponse, errorResponse} from "@wealthy/common"
 
+export const getUserSubscription = async (req, res) => {
+  try {
+    const userId = req.user.id
+
+    const subscription = await Subscription.findOne({userId}).lean()
+
+    const now = new Date()
+    const planData = subscription
+      ? {
+          plan: subscription.plan,
+          interval: subscription.interval,
+          status: subscription.status,
+          expiryDate: subscription.expiryDate || null,
+          isPro:
+            subscription.plan === "pro" &&
+            subscription.status === "active" &&
+            (!subscription.expiryDate ||
+              new Date(subscription.expiryDate) > now),
+        }
+      : {
+          plan: "free",
+          interval: "monthly",
+          status: "active",
+          expiryDate: null,
+          isPro: false,
+        }
+
+    return successResponse(res, 200, "Subscription retrieved", {
+      data: planData,
+    })
+  } catch (error) {
+    return errorResponse(res, 500, "Failed to fetch subscription", error)
+  }
+}
+
 export const checkout = async (req, res) => {
   try {
     const userId = req.user.id
@@ -14,7 +49,7 @@ export const checkout = async (req, res) => {
       userId,
       plan: "pro",
       status: "active",
-      expiryDate: {$gt: new Date()}, 
+      expiryDate: {$gt: new Date()},
     })
 
     if (existingSub) {

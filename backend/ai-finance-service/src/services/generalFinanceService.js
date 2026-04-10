@@ -12,10 +12,13 @@ export const generateGeneralResponse = async (question) => {
     
     Guidelines:
     - Keep it educational and encouraging.
+    - if ask about using previous messages refer them as well
     - If the question is not about finance, politely decline to answer.
     - Use simple terms for beginners.
     - give short and concise answers.
   `
+
+  console.log(prompt)
 
   const result = await model.generateContent(prompt)
   return result.response.text()

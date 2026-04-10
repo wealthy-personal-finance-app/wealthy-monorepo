@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose"
 import {
   Transaction,
   logger,
@@ -6,6 +6,7 @@ import {
   errorResponse,
 } from "@wealthy/common"
 import {CATEGORY_MAP} from "@wealthy/common/utils/categories.js"
+import CustomCategory from "../models/CustomCategory.js"
 
 const log = logger.child({service: "TRANSACTION-SERVICE"})
 
@@ -195,70 +196,131 @@ export const deleteTransaction = async (req, res) => {
 
 export const getCategories = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id
 
-    // 1. Start with a deep copy of the Official Map
-    const mergedCategories = JSON.parse(JSON.stringify(CATEGORY_MAP));
+    const mergedCategories = JSON.parse(JSON.stringify(CATEGORY_MAP))
 
-    // 2. Find all custom transactions for this user
-    const customTransactions = await Transaction.find({ 
-      userId, 
-      isCustom: true 
-    }).select('type parentCategory subCategory').lean();
+    const [customTransactions, persistedCustomCategories] = await Promise.all([
+      Transaction.find({
+        userId,
+        isCustom: true,
+      })
+        .select("type parentCategory subCategory")
+        .lean(),
+      CustomCategory.find({userId})
+        .select("type parentCategory subCategory")
+        .lean(),
+    ])
 
-    // 3. Inject them into the map
-    customTransactions.forEach(tx => {
-      const { type, parentCategory, subCategory } = tx;
+    const injectCategory = ({type, parentCategory, subCategory}) => {
+      if (!type || !parentCategory || !subCategory) return
 
-      // Check if the path exists (e.g., mergedCategories['expense']['Essential Living'])
-      if (mergedCategories[type] && mergedCategories[type][parentCategory]) {
-        
-        // Add the subCategory if it's not already in the list
-        if (!mergedCategories[type][parentCategory].includes(subCategory)) {
-          mergedCategories[type][parentCategory].push(subCategory);
-        }
+      if (!mergedCategories[type]) {
+        mergedCategories[type] = {}
       }
-    });
 
-    return successResponse(res, 200, "Nested categories retrieved", { 
-        data: mergedCategories 
-    });
+      if (!Array.isArray(mergedCategories[type][parentCategory])) {
+        mergedCategories[type][parentCategory] = []
+      }
+
+      if (!mergedCategories[type][parentCategory].includes(subCategory)) {
+        mergedCategories[type][parentCategory].push(subCategory)
+      }
+    }
+
+    customTransactions.forEach(injectCategory)
+    persistedCustomCategories.forEach(injectCategory)
+
+    return successResponse(res, 200, "Nested categories retrieved", {
+      data: mergedCategories,
+    })
   } catch (error) {
-    return errorResponse(res, 500, "Failed to merge categories", error);
+    return errorResponse(res, 500, "Failed to merge categories", error)
   }
-};
+}
+
+export const createCategory = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const {type, parentCategory, subCategory} = req.body
+
+    if (!type || !parentCategory || !subCategory) {
+      return errorResponse(
+        res,
+        400,
+        "type, parentCategory, and subCategory are required"
+      )
+    }
+
+    const normalizedType = String(type).trim().toLowerCase()
+    const normalizedParent = String(parentCategory).trim()
+    const normalizedSub = String(subCategory).trim()
+
+    if (!CATEGORY_MAP[normalizedType]) {
+      return errorResponse(
+        res,
+        400,
+        "Invalid type. Use expense, income, asset, or liability"
+      )
+    }
+
+    const customCategory = await CustomCategory.findOneAndUpdate(
+      {
+        userId,
+        type: normalizedType,
+        parentCategory: normalizedParent,
+        subCategory: normalizedSub,
+      },
+      {
+        $setOnInsert: {
+          userId,
+          type: normalizedType,
+          parentCategory: normalizedParent,
+          subCategory: normalizedSub,
+        },
+      },
+      {upsert: true, new: true}
+    ).lean()
+
+    return successResponse(res, 201, "Category created", {
+      data: customCategory,
+    })
+  } catch (error) {
+    return errorResponse(res, 500, "Failed to create category", error)
+  }
+}
 
 // ===== DASHBOARD SUMMARY =====
 export const getDashboardSummary = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user.id)
 
     const result = await Transaction.aggregate([
-      { $match: { userId } },
+      {$match: {userId}},
       {
         $group: {
-          _id: '$type',
-          total: { $sum: '$amount' }
-        }
-      }
-    ]);
+          _id: "$type",
+          total: {$sum: "$amount"},
+        },
+      },
+    ])
 
-    const summary = { income: 0, expense: 0, asset: 0, liability: 0 };
-    result.forEach(item => { summary[item._id] = item.total; });
-    summary.totalBalance = summary.asset - summary.liability;
-    summary.netFlow = summary.income - summary.expense;
+    const summary = {income: 0, expense: 0, asset: 0, liability: 0}
+    result.forEach((item) => {
+      summary[item._id] = item.total
+    })
+    summary.totalBalance = summary.asset - summary.liability
+    summary.netFlow = summary.income - summary.expense
 
-    log.info(`Dashboard summary fetched for user ${req.user.id}`);
-    return successResponse(res, 200, 'Dashboard summary', { data: summary });
-
+    log.info(`Dashboard summary fetched for user ${req.user.id}`)
+    return successResponse(res, 200, "Dashboard summary", {data: summary})
   } catch (error) {
-    log.error('Failed to get dashboard summary', { error: error.message });
-    return errorResponse(res, 500, 'Failed to get dashboard summary', error);
+    log.error("Failed to get dashboard summary", {error: error.message})
+    return errorResponse(res, 500, "Failed to get dashboard summary", error)
   }
-};
+}
 
-
-var a=0;
+var a = 0
 
 // export const getChartData = async (req, res) => {
 //   try {
@@ -278,12 +340,12 @@ var a=0;
 //     // ===== BALANCE CHART — Assets minus Liabilities =====
 //     if(!type || type === 'balance') {
 //       const result = await Transaction.aggregate([
-//         { 
-//           $match: { 
-//             userId, 
+//         {
+//           $match: {
+//             userId,
 //             date: { $gte: startDate },
 //             type: { $in: ['asset', 'liability'] }
-//           } 
+//           }
 //         },
 //         {
 //           $group: {
@@ -322,8 +384,8 @@ var a=0;
 //     }
 
 //     // ===== INCOME / EXPENSE CHART =====
-//     const match = { 
-//       userId, 
+//     const match = {
+//       userId,
 //       date: { $gte: startDate },
 //       type: type
 //     };
@@ -382,12 +444,12 @@ var a=0;
 //     // ===== BALANCE CHART =====
 //     if(!type || type === 'balance') {
 //       const result = await Transaction.aggregate([
-//         { 
-//           $match: { 
-//             userId, 
+//         {
+//           $match: {
+//             userId,
 //             date: { $gte: startDate },
 //             type: { $in: ['asset', 'liability'] }
-//           } 
+//           }
 //         },
 //         {
 //           $group: {
@@ -427,12 +489,12 @@ var a=0;
 
 //     // ===== INCOME / EXPENSE CHART =====
 //     const result = await Transaction.aggregate([
-//       { 
-//         $match: { 
-//           userId, 
+//       {
+//         $match: {
+//           userId,
 //           date: { $gte: startDate },
 //           type: type
-//         } 
+//         }
 //       },
 //       {
 //         $group: {
@@ -453,134 +515,154 @@ var a=0;
 //   }
 // };
 
-a=1;
+a = 1
 export const getChartData = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
-    const { type, startDate: start, endDate: end } = req.query;
+    const userId = new mongoose.Types.ObjectId(req.user.id)
+    const {type, startDate: start, endDate: end} = req.query
 
-    if(!start || !end) {
-      return errorResponse(res, 400, 'startDate and endDate are required');
+    if (!start || !end) {
+      return errorResponse(res, 400, "startDate and endDate are required")
     }
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = new Date(start)
+    const endDate = new Date(end)
 
     // ===== HELPER: Generate ALL dates in range =====
     const generateAllDates = (start, end) => {
-      const dates = [];
-      const cur = new Date(start);
-      cur.setHours(0,0,0,0);
-      const last = new Date(end);
-      last.setHours(23,59,59,999);
-      while(cur <= last) {
-        const y = cur.getFullYear();
-        const m = String(cur.getMonth()+1).padStart(2,'0');
-        const d = String(cur.getDate()).padStart(2,'0');
-        dates.push(`${y}-${m}-${d}`);
-        cur.setDate(cur.getDate() + 1);
+      const dates = []
+      const cur = new Date(start)
+      cur.setHours(0, 0, 0, 0)
+      const last = new Date(end)
+      last.setHours(23, 59, 59, 999)
+      while (cur <= last) {
+        const y = cur.getFullYear()
+        const m = String(cur.getMonth() + 1).padStart(2, "0")
+        const d = String(cur.getDate()).padStart(2, "0")
+        dates.push(`${y}-${m}-${d}`)
+        cur.setDate(cur.getDate() + 1)
       }
-      return dates;
-    };
+      return dates
+    }
 
     // ===== BALANCE CHART =====
-    if(!type || type === 'balance') {
+    if (!type || type === "balance") {
       const result = await Transaction.aggregate([
-        { $match: { userId, date: { $gte: startDate, $lte: endDate }, type: { $in: ['asset','liability'] } } },
-        { $group: {
-            _id: { date: { $dateToString: { format: '%Y-%m-%d', date: '$date' } }, type: '$type' },
-            total: { $sum: '$amount' }
-        }},
-        { $group: {
-            _id: '$_id.date',
-            asset: { $sum: { $cond: [{ $eq: ['$_id.type','asset'] }, '$total', 0] } },
-            liability: { $sum: { $cond: [{ $eq: ['$_id.type','liability'] }, '$total', 0] } }
-        }},
-        { $project: { _id: 1, total: { $subtract: ['$asset','$liability'] } } },
-        { $sort: { _id: 1 } }
-      ]);
+        {
+          $match: {
+            userId,
+            date: {$gte: startDate, $lte: endDate},
+            type: {$in: ["asset", "liability"]},
+          },
+        },
+        {
+          $group: {
+            _id: {
+              date: {$dateToString: {format: "%Y-%m-%d", date: "$date"}},
+              type: "$type",
+            },
+            total: {$sum: "$amount"},
+          },
+        },
+        {
+          $group: {
+            _id: "$_id.date",
+            asset: {
+              $sum: {$cond: [{$eq: ["$_id.type", "asset"]}, "$total", 0]},
+            },
+            liability: {
+              $sum: {$cond: [{$eq: ["$_id.type", "liability"]}, "$total", 0]},
+            },
+          },
+        },
+        {$project: {_id: 1, total: {$subtract: ["$asset", "$liability"]}}},
+        {$sort: {_id: 1}},
+      ])
 
       // Fill missing dates with 0
-      const dataMap = {};
-      result.forEach(r => { dataMap[r._id] = r.total; });
-      const allDates = generateAllDates(startDate, endDate);
-      const filled = allDates.map(d => ({ _id: d, total: dataMap[d] || 0 }));
+      const dataMap = {}
+      result.forEach((r) => {
+        dataMap[r._id] = r.total
+      })
+      const allDates = generateAllDates(startDate, endDate)
+      const filled = allDates.map((d) => ({_id: d, total: dataMap[d] || 0}))
 
-      return successResponse(res, 200, 'Balance chart data', { data: filled });
+      return successResponse(res, 200, "Balance chart data", {data: filled})
     }
 
     // ===== INCOME / EXPENSE CHART =====
     const result = await Transaction.aggregate([
-      { $match: { userId, date: { $gte: startDate, $lte: endDate }, type } },
-      { $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
-          total: { $sum: '$amount' },
-          count: { $sum: 1 }
-      }},
-      { $sort: { _id: 1 } }
-    ]);
+      {$match: {userId, date: {$gte: startDate, $lte: endDate}, type}},
+      {
+        $group: {
+          _id: {$dateToString: {format: "%Y-%m-%d", date: "$date"}},
+          total: {$sum: "$amount"},
+          count: {$sum: 1},
+        },
+      },
+      {$sort: {_id: 1}},
+    ])
 
     // Fill missing dates with 0
-    const dataMap = {};
-    result.forEach(r => { dataMap[r._id] = r.total; });
-    const allDates = generateAllDates(startDate, endDate);
-    const filled = allDates.map(d => ({ _id: d, total: dataMap[d] || 0 }));
+    const dataMap = {}
+    result.forEach((r) => {
+      dataMap[r._id] = r.total
+    })
+    const allDates = generateAllDates(startDate, endDate)
+    const filled = allDates.map((d) => ({_id: d, total: dataMap[d] || 0}))
 
-    return successResponse(res, 200, 'Chart data', { data: filled });
-
+    return successResponse(res, 200, "Chart data", {data: filled})
   } catch (error) {
-    log.error('Failed to get chart data', { error: error.message });
-    return errorResponse(res, 500, 'Failed to get chart data', error);
+    log.error("Failed to get chart data", {error: error.message})
+    return errorResponse(res, 500, "Failed to get chart data", error)
   }
-};
+}
 // ===== SPENDING BY CATEGORY (Donut + Pie) =====
 export const getSpendingByCategory = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user.id)
 
     const result = await Transaction.aggregate([
-      { $match: { userId, type: 'expense' } },
+      {$match: {userId, type: "expense"}},
       {
         $group: {
-          _id: '$parentCategory',
-          total: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
+          _id: "$parentCategory",
+          total: {$sum: "$amount"},
+          count: {$sum: 1},
+        },
       },
-      { $sort: { total: -1 } }
-    ]);
+      {$sort: {total: -1}},
+    ])
 
-    log.info(`Spending by category fetched for user ${req.user.id}`);
-    return successResponse(res, 200, 'Spending by category', { data: result });
-
+    log.info(`Spending by category fetched for user ${req.user.id}`)
+    return successResponse(res, 200, "Spending by category", {data: result})
   } catch (error) {
-    log.error('Failed to get spending by category', { error: error.message });
-    return errorResponse(res, 500, 'Failed to get spending by category', error);
+    log.error("Failed to get spending by category", {error: error.message})
+    return errorResponse(res, 500, "Failed to get spending by category", error)
   }
-};
+}
 
 // ===== SAVINGS =====
 export const getSavings = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user.id)
 
     const result = await Transaction.aggregate([
-      { $match: { userId, type: 'asset' } },
+      {$match: {userId, type: "asset"}},
       {
         $group: {
-          _id: '$subCategory',
-          total: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
+          _id: "$subCategory",
+          total: {$sum: "$amount"},
+          count: {$sum: 1},
+        },
       },
-      { $sort: { total: -1 } }
-    ]);
+      {$sort: {total: -1}},
+    ])
 
-    log.info(`Savings fetched for user ${req.user.id}`);
-    return successResponse(res, 200, 'Savings data', { data: result });
-
+    log.info(`Savings fetched for user ${req.user.id}`)
+    return successResponse(res, 200, "Savings data", {data: result})
   } catch (error) {
-    log.error('Failed to get savings', { error: error.message });
-    return errorResponse(res, 500, 'Failed to get savings', error);
+    log.error("Failed to get savings", {error: error.message})
+    return errorResponse(res, 500, "Failed to get savings", error)
   }
-};
+}
