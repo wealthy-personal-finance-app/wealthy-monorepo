@@ -17,7 +17,7 @@ export const createCheckoutSession = async (userId, userEmail, interval) => {
   const stripeInstance = getStripe();
   
   const isAnnual = interval === 'annually';
-  const unitAmount = isAnnual ? 9999 : 999; 
+  const unitAmount = isAnnual ? 7188 : 699; 
 
   return await stripeInstance.checkout.sessions.create({
     payment_method_types: ['card'],
